@@ -89,15 +89,15 @@ h2{font-size:28px}
     <h1>Tilt Maze</h1>
     <p class="lede">Tilt your phone to roll the ball to the ring. Every maze is new, and they never run out.</p>
     <div class="modes">
-      <button class="mode" id="bEndless"><span class="mname">Endless</span><span class="mdesc">Mazes grow and traps pile on: holes, patrolling saws, then trapdoors. 3 balls, +1 every 5 levels.</span><span class="mbest" id="bestE"></span></button>
-      <button class="mode" id="bCalm"><span class="mname">Calm</span><span class="mdesc">Just mazes, no traps, forever.</span><span class="mbest" id="bestC"></span></button>
+      <button class="mode" id="bEndless"><span class="mname">Endless</span><span class="mdesc">Every level is bigger and meaner: holes, patrolling saws, then trapdoors. 3 balls, +1 every 5 levels.</span><span class="mbest" id="bestE"></span></button>
+      <button class="mode" id="bCalm"><span class="mname">Calm</span><span class="mdesc">Just mazes that keep growing, no traps, forever.</span><span class="mbest" id="bestC"></span></button>
     </div>
     <ul class="legend">
       <li><svg viewBox="0 0 30 30"><circle cx="15" cy="15" r="11" fill="#d4d4d4"/><circle cx="15" cy="15" r="7" fill="#bdbdbd"/></svg>Holes</li>
       <li><svg viewBox="0 0 30 30"><polygon fill="#e5332a" points="15,2 18,9 25,6 22,13 28,15 22,17 25,24 18,21 15,28 12,21 5,24 8,17 2,15 8,13 5,6 12,9"/><circle cx="15" cy="15" r="3" fill="#fff"/></svg>Saws</li>
       <li><svg viewBox="0 0 30 30"><rect x="3" y="3" width="24" height="24" fill="#fff" stroke="#111" stroke-width="2"/><path d="M3 13 13 3M3 23 23 3M9 27 27 9M19 27 27 19" stroke="#111" stroke-width="2"/></svg>Trapdoors</li>
     </ul>
-    <p class="fine">Hold the phone flat and tilt to roll. Tap a mode and allow motion access if asked. No sensor? Drag on the board to steer, or use arrow keys on a computer.</p>
+    <p class="fine">Lay the phone flat like a table and tilt to roll. Tap a mode and allow motion access if asked. No sensor? Drag on the board to steer, or use arrow keys on a computer.</p>
   </div>
 </div>
 
@@ -106,7 +106,8 @@ h2{font-size:28px}
     <h2>Paused</h2>
     <div class="btns">
       <button class="btn primary" id="bResume">Resume</button>
-      <button class="btn" id="bCal">Set current angle as level</button>
+      <button class="btn" id="bFlat">Flat on a table is level</button>
+      <button class="btn" id="bCal">Use current angle as level</button>
       <button class="btn" id="bQuit">Quit to menu</button>
     </div>
   </div>
@@ -131,7 +132,7 @@ const layer=document.createElement('canvas'),lctx=layer.getContext('2d');
 const R=.22,T=.12,HOLE=.2,SAW=.17,TRAP=.34,E=.28,PAD=.38;
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,String(v))}catch(e){}}};
-let W=1,H=1,dpr=1,sc=30,ox=0,oy=0;
+let W=1,H=1,dpr=1,sc=30,ldpr=1,LW=1,LH=1;const MINCELL=30,cam={x:0,y:0};
 let G=null,state='title',shake=0,flash=0;
 
 /* ---------- maze ---------- */
@@ -167,36 +168,38 @@ function runs(m){
 }
 
 /* ---------- level ---------- */
-const INTRO={2:'New: holes. Steer around the dark pits.',4:'New: saws patrol straight corridors.',6:'New: trapdoors. Stripes flash before they open.'};
+const INTRO={2:'New: holes. Steer around the grey pits.',3:'New: saws patrol straight corridors.',5:'New: trapdoors. Lines flash red before they open.'};
 function startLevel(preview){
   const lv=G.level,hard=G.mode==='endless';
-  const cols=Math.min(5+Math.floor((lv-1)/2),11);
-  const asp=(stage.clientHeight||600)/(stage.clientWidth||400);
-  const rows=Math.max(4,Math.min(20,Math.round(cols*asp)));
+  const cols=Math.min(6+lv,24);
+  const asp=Math.max(1.3,(stage.clientHeight||600)/(stage.clientWidth||400));
+  const rows=Math.min(44,Math.round(cols*asp*1.1));
   const m=genMaze(cols,rows,lv>=3?.06:0),n=m.n,{path,dist}=solve(m);
   const pidx=new Int32Array(n).fill(-1);path.forEach((v,k)=>pidx[v]=k);
   const used=new Set([n-1]);for(let i=0;i<n;i++)if(dist[i]<=1)used.add(i);
   const saws=[],holes=[],traps=[];
-  if(hard&&lv>=4){
-    const count=Math.min(Math.floor((lv-2)/2),6),spd=Math.min(.9+lv*.07,2.6);
+  if(hard&&lv>=3){
+    const count=Math.min(1+Math.floor((lv-3)*.8),Math.floor(n/12)),spd=Math.min(1.1+lv*.12,3.6);
     for(const rn of shuffle(runs(m))){if(saws.length>=count)break;if(rn.cells.some(i=>used.has(i)))continue;
       rn.cells.forEach(i=>used.add(i));const len=Math.hypot(rn.bx-rn.ax,rn.by-rn.ay);
       saws.push({...rn,rate:spd/(len*2),p:Math.random(),rot:0,x:rn.ax,y:rn.ay})}
   }
-  if(hard&&lv>=6){
-    const count=Math.min(Math.floor((lv-4)/2),8),per=Math.max(2.4,3.4-lv*.04);
+  if(hard&&lv>=5){
+    const count=Math.min(1+Math.floor((lv-5)*.7),Math.floor(n/14)),per=Math.max(1.7,3.2-lv*.07);
     for(const i of shuffle([...Array(n).keys()])){if(traps.length>=count)break;if(used.has(i))continue;used.add(i);
-      traps.push({x:i%m.c+.5,y:(i/m.c|0)+.5,per,ph:Math.random(),open:.42})}
+      traps.push({x:i%m.c+.5,y:(i/m.c|0)+.5,per,ph:Math.random(),open:.45})}
   }
   if(hard&&lv>=2){
-    const count=Math.min(Math.floor(lv*.9),Math.floor(n*.14));
+    const count=Math.floor(n*Math.min(.03+lv*.01,.17));
     for(const i of shuffle([...Array(n).keys()])){if(holes.length>=count)break;if(used.has(i))continue;
       const x=i%m.c,y=i/m.c|0;let hx=x+.5,hy=y+.5;const k=pidx[i];
       if(k>=0){const p=path[k-1],q=path[k+1];if(p==null||q==null)continue;const off=(Math.random()<.5?-1:1)*.24;
         if((p/m.c|0)===y&&(q/m.c|0)===y)hy+=off;else if(p%m.c===x&&q%m.c===x)hx+=off;else continue}
       used.add(i);holes.push({x:hx,y:hy})}
   }
-  Object.assign(G,{m,saws,holes,traps,t:0,inv:1.2,anim:null,ball:{x:.5,y:.5,vx:0,vy:0,s:1},goal:{x:cols-.5,y:rows-.5}});
+  const safe=new Uint8Array(n);path.forEach(i=>{safe[i]=1});
+  for(const sw of saws)sw.cells.forEach(i=>safe[i]=0);for(const t of traps)safe[(t.y|0)*m.c+(t.x|0)]=0;
+  Object.assign(G,{m,saws,holes,traps,pidx,safe,cp:0,t:0,inv:1.2,anim:null,ball:{x:.5,y:.5,vx:0,vy:0,s:1},goal:{x:cols-.5,y:rows-.5}});
   layout();
   if(preview)return;
   state='play';hud();
@@ -208,12 +211,18 @@ function newGame(mode){G={mode,level:1,lives:mode==='endless'?3:0};startLevel(fa
 /* ---------- layout & static board ---------- */
 function layout(){
   W=stage.clientWidth||1;H=stage.clientHeight||1;dpr=Math.min(devicePixelRatio||1,2.5);
-  for(const c of [cv,layer]){c.width=Math.round(W*dpr);c.height=Math.round(H*dpr)}
+  cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);
   if(!G||!G.m)return;
-  const {c,r}=G.m;sc=Math.min(W/(c+2*PAD),H/(r+2*PAD));ox=(W-c*sc)/2;oy=(H-r*sc)/2;
-  drawLayer();
+  const {c,r}=G.m;sc=Math.min(60,Math.max(MINCELL,Math.min(W/(c+2*PAD),H/(r+2*PAD))));
+  LW=(c+2*PAD)*sc;LH=(r+2*PAD)*sc;ldpr=Math.min(dpr,2,Math.sqrt(14e6/(LW*LH)));
+  layer.width=Math.round(LW*ldpr);layer.height=Math.round(LH*ldpr);
+  drawLayer();camTarget(true);
 }
-const X=v=>ox+v*sc,Y=v=>oy+v*sc;
+const X=v=>(v-cam.x)*sc,Y=v=>(v-cam.y)*sc;
+function camAxis(span,view,p,v){if(span+2*PAD<=view)return(span-view)/2;return Math.max(-PAD,Math.min(span+PAD-view,p+v*.3-view/2))}
+function camTarget(snap){if(!G||!G.m)return;const b=G.ball,vw=W/sc,vh=H/sc;
+  const tx=camAxis(G.m.c,vw,b.x,b.vx),ty=camAxis(G.m.r,vh,b.y,b.vy);
+  if(snap){cam.x=tx;cam.y=ty}else{cam.x+=(tx-cam.x)*.12;cam.y+=(ty-cam.y)*.12}}
 function rr(g,x,y,w,h,r){g.beginPath();g.roundRect?g.roundRect(x,y,w,h,r):g.rect(x,y,w,h)}
 function wallRects(m){
   const o=[],h=T/2;
@@ -223,7 +232,7 @@ function wallRects(m){
   return o;
 }
 function drawLayer(){
-  const g=lctx,m=G.m;g.setTransform(dpr,0,0,dpr,0,0);g.fillStyle='#ffffff';g.fillRect(0,0,W,H);
+  const g=lctx,m=G.m,X=v=>(v+PAD)*sc,Y=v=>(v+PAD)*sc;g.setTransform(ldpr,0,0,ldpr,0,0);g.fillStyle='#ffffff';g.fillRect(0,0,LW,LH);
   // start marker
   g.strokeStyle='#d8d8d8';g.lineWidth=Math.max(1,sc*.04);g.beginPath();g.arc(X(.5),Y(.5),sc*.3,0,7);g.stroke();
   // saw tracks
@@ -240,9 +249,10 @@ function drawLayer(){
 function pit(g,x,y,r){g.fillStyle='#d4d4d4';g.beginPath();g.arc(x,y,r,0,7);g.fill();g.fillStyle='#bdbdbd';g.beginPath();g.arc(x,y,r*.62,0,7);g.fill()}
 
 /* ---------- input ---------- */
-const tilt={live:false,b:0,g:0,b0:null,g0:null};
-addEventListener('deviceorientation',e=>{if(e.beta==null||e.gamma==null)return;tilt.b=e.beta;tilt.g=e.gamma;if(!tilt.live){tilt.live=true;calibrate();ctlChip()}});
+const tilt={live:false,b:0,g:0,b0:0,g0:0};
+addEventListener('deviceorientation',e=>{if(e.beta==null||e.gamma==null)return;tilt.b=e.beta;tilt.g=e.gamma;if(!tilt.live){tilt.live=true;ctlChip()}});
 function calibrate(){tilt.b0=tilt.b;tilt.g0=tilt.g}
+function flat(){tilt.b0=0;tilt.g0=0}
 function tiltVec(){
   const dx=tilt.g-tilt.g0,dy=tilt.b-tilt.b0,a=((screen.orientation&&screen.orientation.angle)??window.orientation??0);
   let x=dx,y=dy;if(a===90){x=dy;y=-dx}else if(a===-90||a===270){x=-dy;y=dx}else if(a===180){x=-dx;y=-dy}
@@ -262,6 +272,7 @@ function control(){
   return{x:0,y:0};
 }
 async function enableTilt(){
+  try{screen.orientation&&screen.orientation.lock&&screen.orientation.lock('portrait').catch(()=>{})}catch(e){}
   try{if(window.DeviceOrientationEvent&&typeof DeviceOrientationEvent.requestPermission==='function')await DeviceOrientationEvent.requestPermission()}catch(e){}
   try{navigator.wakeLock&&navigator.wakeLock.request('screen').catch(()=>{})}catch(e){}
   setTimeout(()=>{if(!tilt.live&&state==='play')toast(window.isSecureContext===false?"Motion needs the https link. Drag on the board to steer for now.":"No tilt data yet. Tap DRAG to ask for motion access, or drag on the board to steer.",5000)},1600);
@@ -303,6 +314,7 @@ function update(dt){
   const sp=Math.hypot(b.vx,b.vy);if(sp>7){b.vx*=7/sp;b.vy*=7/sp}
   const steps=Math.min(12,1+Math.ceil(sp*dt/.04));
   for(let i=0;i<steps;i++){b.x+=b.vx*dt/steps;b.y+=b.vy*dt/steps;collide(b)}
+  {const ci=Math.floor(b.y)*G.m.c+Math.floor(b.x);if(G.safe[ci]&&G.pidx[ci]>G.pidx[G.cp])G.cp=ci}
   if(Math.hypot(b.x-G.goal.x,b.y-G.goal.y)<.24){G.anim={type:'goal',t:0,x:G.goal.x,y:G.goal.y};b.vx=b.vy=0;return}
   for(const h of G.holes)if(Math.hypot(b.x-h.x,b.y-h.y)<HOLE*.85){fall(h.x,h.y);return}
   for(const t of G.traps)if(trapOpen(t)&&Math.abs(b.x-t.x)<TRAP*.85&&Math.abs(b.y-t.y)<TRAP*.85){fall(t.x,t.y);return}
@@ -311,7 +323,7 @@ function update(dt){
 function fall(x,y){G.anim={type:'fall',t:0,x,y};G.ball.vx=G.ball.vy=0;try{navigator.vibrate&&navigator.vibrate(30)}catch(e){}}
 function loseLife(){
   if(G.mode==='endless'){G.lives--;hud();if(G.lives<=0){gameOver();return}}
-  G.ball={x:.5,y:.5,vx:0,vy:0,s:1};G.inv=1.2;G.anim=null;
+  G.ball={x:G.cp%G.m.c+.5,y:(G.cp/G.m.c|0)+.5,vx:0,vy:0,s:1};G.inv=1.2;G.anim=null;
 }
 function levelClear(){
   state='clear';const lv=G.level,key='tl-best-'+G.mode,best=+(store.get(key)||0);if(lv>best)store.set(key,lv);
@@ -342,12 +354,15 @@ function render(dt){
   ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
   if(!G||!G.m)return;
   let sx=0,sy=0;if(shake>0){shake-=dt;sx=(Math.random()-.5)*10*shake;sy=(Math.random()-.5)*10*shake}
-  ctx.translate(sx,sy);ctx.drawImage(layer,0,0,W,H);
+  camTarget(false);ctx.translate(sx,sy);ctx.drawImage(layer,X(-PAD),Y(-PAD),LW,LH);
   for(const t of G.traps)drawTrap(t);
   for(const s of G.saws)drawSaw(X(s.x),Y(s.y),SAW*sc,s.rot);
   const b=G.ball,r=R*sc*b.s;
   if(r>.3){ctx.globalAlpha=G.inv>0&&!G.anim?(Math.floor(G.t*10)%2?.35:1):1;ctx.fillStyle='#111';ctx.beginPath();ctx.arc(X(b.x),Y(b.y),r,0,7);ctx.fill();ctx.globalAlpha=1}
   ctx.setTransform(dpr,0,0,dpr,0,0);
+  {const gx=X(G.goal.x),gy=Y(G.goal.y),m=18;if(gx<0||gy<0||gx>W||gy>H){const cx=W/2,cy=H/2,a=Math.atan2(gy-cy,gx-cx);
+    const px=Math.max(m,Math.min(W-m,gx)),py=Math.max(m,Math.min(H-m,gy));ctx.save();ctx.translate(px,py);ctx.rotate(a);
+    ctx.fillStyle='#111';ctx.beginPath();ctx.moveTo(10,0);ctx.lineTo(-7,-8);ctx.lineTo(-7,8);ctx.closePath();ctx.fill();ctx.restore()}}
   if(stick&&state==='play'){ctx.strokeStyle='rgba(0,0,0,.18)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(stick.x0,stick.y0,55,0,7);ctx.stroke();
     let dx=stick.x-stick.x0,dy=stick.y-stick.y0;const l=Math.hypot(dx,dy);if(l>55){dx*=55/l;dy*=55/l}
     ctx.fillStyle='rgba(0,0,0,.18)';ctx.beginPath();ctx.arc(stick.x0+dx,stick.y0+dy,16,0,7);ctx.fill()}
@@ -361,7 +376,7 @@ let bnT,toT;
 function banner(big,sub,ms){const el=$('banner');$('bnBig').textContent=big;$('bnSub').textContent=sub;$('bnSub').hidden=!sub;el.hidden=false;el.classList.remove('show');void el.offsetWidth;el.classList.add('show');clearTimeout(bnT);bnT=setTimeout(()=>el.hidden=true,ms)}
 function toast(msg,ms){const el=$('toast');el.textContent=msg;el.hidden=false;clearTimeout(toT);toT=setTimeout(()=>el.hidden=true,ms)}
 function ctlChip(){const c=$('hCtl');c.textContent=tilt.live?'Tilt':'Drag';c.classList.toggle('on',tilt.live)}
-$('hCtl').onclick=()=>{if(tilt.live){calibrate();toast('Current angle is now level.',1600)}else enableTilt()};
+$('hCtl').onclick=()=>{if(tilt.live){flat();toast('Reset: flat on a table is level.',1600)}else enableTilt()};
 function hud(){
   $('hLv').textContent=G.level;const p=$('hPips');p.innerHTML='';
   if(G.mode==='endless'){const max=Math.max(3,G.lives);for(let i=0;i<max;i++){const d=document.createElement('span');d.className='pip'+(i>=G.lives?' lost':'');p.appendChild(d)}}
@@ -374,6 +389,7 @@ $('bEndless').onclick=()=>begin('endless');$('bCalm').onclick=()=>begin('calm');
 function togglePause(){if(state==='play'){state='pause';stick=null;$('sPause').hidden=false}else if(state==='pause'){state='play';$('sPause').hidden=true}}
 $('bPause').onclick=togglePause;$('bResume').onclick=togglePause;
 $('bCal').onclick=()=>{if(tilt.live){calibrate();toast('Current angle is now level.',1800)}else toast('No tilt data yet. Drag on the board to steer.',2200);togglePause()};
+$('bFlat').onclick=()=>{flat();toast('Flat on a table is level.',1600);togglePause()};
 $('bQuit').onclick=()=>{$('sPause').hidden=true;toMenu()};
 $('bAgain').onclick=()=>begin('endless');$('bMenu').onclick=()=>{$('sOver').hidden=true;toMenu()};
 function toMenu(){state='title';bests();$('sTitle').hidden=false;G={mode:'calm',level:5,lives:0};startLevel(true);$('hLv').textContent='–';$('hPips').innerHTML=''}
